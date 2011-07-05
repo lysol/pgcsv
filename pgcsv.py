@@ -203,7 +203,7 @@ class PGCSV(object):
                 sd = self.csvfile.read(dialect_bytes)
                 dialect = csv.Sniffer().sniff(sd, ',\t')
                 self.csvfile.seek(pos)
-            except _csv.ERror:
+            except _csv.Error:
                 dialect=None
         if force_tabbed:
             csv.register_dialect('tabbed', delimiter="\t", quoting=csv.QUOTE_NONE)
@@ -245,7 +245,8 @@ def main():
     parser.add_argument('-C', '--byte-counter', action='store_true',
         dest='byte_counter')
     parser.add_argument('--debug-file', dest='debug_file')
-    parser.add_argument('-r', '--force-tabbed', dest='force_tabbed')
+    parser.add_argument('-r', '--force-tabbed', dest='force_tabbed',
+        action='store_true')
 
     args = parser.parse_args()
     
