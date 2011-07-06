@@ -151,8 +151,9 @@ class PGCSV(object):
         for i in range(lines):
             line = self.csvreader.next()
             for index, item in enumerate(line):
-                tt = try_type(item, self.types[index])
-                percs[index][try_type(item, self.types[index])] += 1
+                if index < len(self.header):
+                    tt = try_type(item, self.types[index])
+                    percs[index][try_type(item, self.types[index])] += 1
             total += 1
         for index, perc in enumerate(percs):
             sorted_percs = sorted(perc.items(), key=lambda i: i[1])
