@@ -13,8 +13,7 @@ csv.field_size_limit(524288000)
 byte_counter = 0
 
 type_rank = [
-    'double precision',
-    'integer',
+    'decimal',
     'character varying'
     ]
 
@@ -24,13 +23,20 @@ def try_type(anystring, existing):
             return 'character varying'
         try:
             dummyvalue = float(anystring.replace('f',''))
-            if int(anystring.replace('f','')) == dummyvalue:
-                return 'integer'
-            return 'float'
+            return 'decimal'
         except ValueError:
             return 'character varying'
     return type_rank[max((type_rank.index(current_type()),
         type_rank.index(existing)))]
+
+def clean_type(anystring, typename):
+    if typename == 'decimal':
+        try:
+            return str(float(anystring))
+        except ValueError:
+            return ''
+    else:
+        return anystring
 
 
 class CopyProxy:
@@ -115,6 +121,9 @@ class PGCSV(object):
         line = map(lambda item: item if not None else '\N', line)
         if self.strip_data:
             line = [item.strip() for item in line]
+        #if hasattr(self, 'types') and self.detect_types:
+        #    line = [clean_type(item, self.types[index]) for index, item \
+        #        in enumerate(line)]
         return line
         
     def get_header(self):
@@ -128,16 +137,34 @@ class PGCSV(object):
     def init_type_dict(self):
         pos = self.csvfile.tell()
         self.csvfile.seek(0)
-        header = self.next()
-        self.types = ['character varying' for index, field in \
+        header = self.csvreader.next()
+        self.types = ['decimal' for index, field in \
             enumerate(header)]
 
     def set_detect_types(self, lines):
+        total = 0
+        percs = [{
+            'decimal': 0,
+            'character varying': 0
+            } for x in self.types]
         pos = self.csvfile.tell()
         for i in range(lines):
-            line = self.next()
+            line = self.csvreader.next()
             for index, item in enumerate(line):
-                self.types[index] = try_type(item, self.types[index])
+                tt = try_type(item, self.types[index])
+                percs[index][try_type(item, self.types[index])] += 1
+            total += 1
+        for index, perc in enumerate(percs):
+            sorted_percs = sorted(perc.items(), key=lambda i: i[1])
+            sorted_percs.reverse()
+            highest = filter(lambda t: float(t[1]) / total > \
+                (1.00 - self.tolerance), sorted_percs)
+            if len(highest) > 0:
+                self.types[index] = highest[0][0]
+            else:
+                self.types[index] = 'character varying'
+                
+
         self.csvfile.seek(pos)
 
     def create_table(self):
@@ -148,23 +175,34 @@ class PGCSV(object):
             )
         
         table_query = """
-            CREATE TABLE \"%s\" (
+            CREATE TABLE \"%s\".\"%s\" (
                 %s
             );
-            """ % (self.table_name, field_list)
+            """ % (self.schema, self.table_name, field_list)
         if self.drop_first:
-            cur.execute("DROP TABLE IF EXISTS \"%s\";" % self.table_name)
+            cur.execute("DROP TABLE IF EXISTS \"%s\".\"%s\";" % \
+                (self.schema, self.table_name))
         cur.execute(table_query)
         self._do_copy(cur)
         self.conn.commit()
+        return True
 
     def _do_copy(self, cursor):
         cp = CopyProxy(self, byte_counter=self.byte_counter,
             debug_file=self.debug_file)
         cursor.copy_expert(
-            'COPY "%s" FROM STDIN WITH DELIMITER AS'
+            'COPY "%s"."%s" FROM STDIN WITH DELIMITER AS'
             '\',\' CSV QUOTE AS \'"\'' % \
-            self.table_name, cp, 1024)
+            (self.schema, self.table_name), cp, 1024)
+
+    def _check_schema(self):
+        cur = self.conn.cursor()
+        cur.execute("""SELECT schema_name FROM information_schema.schemata
+            WHERE schema_name = %s""", [self.schema])
+        res = cur.fetchone()
+        if res is None:
+            cur.execute("CREATE SCHEMA \"%s\"" % self.schema)
+        self.conn.commit()
 
     def _clean_name(self, s):
         s = s.lower().strip()
@@ -185,14 +223,16 @@ class PGCSV(object):
     def __init__(self, csvfile, table_name, pg_service, strip_data=False,
         detect_types=False, dialect='excel', sniff_dialect=False,
         schema='public', dialect_bytes=2048, drop_first=False,
-        clean_field_names=False, detect_type_lines=100, byte_counter=False,
-        debug_file=None, force_tabbed=False, **fmtparam):
+        clean_field_names=False, detect_type_lines=500, byte_counter=False,
+        debug_file=None, force_tabbed=False, tolerance=0, **fmtparam):
 
         self.drop_first = drop_first
         self.table_name = table_name
         self.pg_service = pg_service
         self.detect_types = detect_types
         self.schema = schema
+        self.tolerance = tolerance
+        
         self.csvfile = csvfile
         self.sniff_dialect = sniff_dialect
         self.strip_data = strip_data
@@ -216,7 +256,8 @@ class PGCSV(object):
             self.header = self._dedupe_names(self.header)
 
         self.conn = psycopg2.connect(pg_service)
-        
+        self._check_schema()
+
         if detect_types:
             self.set_detect_types(detect_type_lines)
         self.byte_counter = byte_counter
@@ -247,6 +288,9 @@ def main():
     parser.add_argument('--debug-file', dest='debug_file')
     parser.add_argument('-r', '--force-tabbed', dest='force_tabbed',
         action='store_true')
+    parser.add_argument('-S', '--schema', dest='schema')
+    parser.add_argument('-o', '--tolerance', dest='tolerance',
+        help='Type detection tolerance', default=0, type=float)
 
     args = parser.parse_args()
     
@@ -259,7 +303,8 @@ def main():
         strip_data=args.strip_data, detect_types=args.detect_fieldtypes,
         sniff_dialect=args.auto_detect, drop_first=args.drop_first,
         clean_field_names=args.clean_fields, byte_counter=args.byte_counter,
-        debug_file=args.debug_file, force_tabbed=args.force_tabbed)
+        debug_file=args.debug_file, force_tabbed=args.force_tabbed,
+        schema=args.schema, tolerance=args.tolerance)
     
     pgcsv.create_table()
 
