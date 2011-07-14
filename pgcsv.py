@@ -88,7 +88,8 @@ class CopyProxy:
     def _fillbuff(self, size):
         while len(self.buf) < size and not self.eof:
             try:
-                self.writer.writerow(self.generator.next())
+                row = self.generator.next()
+                self.writer.writerow(row)
             except StopIteration:
                 if not self.eof:
                     self.eof = True
@@ -140,6 +141,7 @@ class PGCSV(object):
         header = self.csvreader.next()
         self.types = ['decimal' for index, field in \
             enumerate(header)]
+        self.csvfile.seek(pos)
 
     def set_detect_types(self, lines):
         total = 0
@@ -149,12 +151,15 @@ class PGCSV(object):
             } for x in self.types]
         pos = self.csvfile.tell()
         for i in range(lines):
-            line = self.csvreader.next()
-            for index, item in enumerate(line):
-                if index < len(self.header):
-                    tt = try_type(item, self.types[index])
-                    percs[index][try_type(item, self.types[index])] += 1
-            total += 1
+            try:
+                line = self.csvreader.next()
+                for index, item in enumerate(line):
+                    if index < len(self.header):
+                        tt = try_type(item, self.types[index])
+                        percs[index][try_type(item, self.types[index])] += 1
+                total += 1
+            except StopIteration:
+                break
         for index, perc in enumerate(percs):
             sorted_percs = sorted(perc.items(), key=lambda i: i[1])
             sorted_percs.reverse()
@@ -165,7 +170,6 @@ class PGCSV(object):
             else:
                 self.types[index] = 'character varying'
                 
-
         self.csvfile.seek(pos)
 
     def create_table(self):
@@ -238,14 +242,15 @@ class PGCSV(object):
         self.sniff_dialect = sniff_dialect
         self.strip_data = strip_data
         if sniff_dialect:
+            pos = self.csvfile.tell()
             try:
-                pos = self.csvfile.tell()
                 self.csvfile.seek(0)
                 sd = self.csvfile.read(dialect_bytes)
                 dialect = csv.Sniffer().sniff(sd, ',\t')
                 self.csvfile.seek(pos)
             except _csv.Error:
                 dialect=None
+                self.csvfile.seek(pos)
         if force_tabbed:
             csv.register_dialect('tabbed', delimiter="\t", quoting=csv.QUOTE_NONE)
             dialect = 'tabbed'
@@ -274,7 +279,7 @@ def main():
         dest='table_name', required=True)
     parser.add_argument('-T','--detect-types', action='store_true',
         dest='detect_fieldtypes')
-    parser.add_argument('-c', '--clean-fields', action='store_true',
+    parser.add_argument('-c', '--clean-field-names', action='store_true',
         dest='clean_fields')
     parser.add_argument('-s', '--strip-data', action='store_true',
         dest='strip_data')
