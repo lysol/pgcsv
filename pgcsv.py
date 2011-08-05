@@ -195,6 +195,9 @@ class PGCSV(object):
     def _do_copy(self, cursor):
         cp = CopyProxy(self, byte_counter=self.byte_counter,
             debug_file=self.debug_file)
+        # skip a line if we're skipping the header
+        if self.skip_header and self.csvfile.tell() == 0:
+            self.csvfile.readline()
         cursor.copy_expert(
             'COPY "%s"."%s" FROM STDIN WITH DELIMITER AS'
             '\',\' CSV QUOTE AS \'"\'' % \
@@ -229,7 +232,8 @@ class PGCSV(object):
         detect_types=False, dialect='excel', sniff_dialect=False,
         schema='public', dialect_bytes=2048, drop_first=False,
         clean_field_names=False, detect_type_lines=500, byte_counter=False,
-        debug_file=None, force_tabbed=False, tolerance=0, **fmtparam):
+        debug_file=None, force_tabbed=False, skip_header=True, tolerance=0,
+        **fmtparam):
 
         self.drop_first = drop_first
         self.table_name = table_name
@@ -237,7 +241,7 @@ class PGCSV(object):
         self.detect_types = detect_types
         self.schema = schema
         self.tolerance = tolerance
-        
+        self.skip_header = skip_header
         self.csvfile = csvfile
         self.sniff_dialect = sniff_dialect
         self.strip_data = strip_data
@@ -297,6 +301,8 @@ def main():
     parser.add_argument('-S', '--schema', dest='schema')
     parser.add_argument('-o', '--tolerance', dest='tolerance',
         help='Type detection tolerance', default=0, type=float)
+    parser.add_argument('-H', '--skip-header', dest='skip_header',
+        action='store_true', default=True)
 
     args = parser.parse_args()
     
@@ -310,7 +316,7 @@ def main():
         sniff_dialect=args.auto_detect, drop_first=args.drop_first,
         clean_field_names=args.clean_fields, byte_counter=args.byte_counter,
         debug_file=args.debug_file, force_tabbed=args.force_tabbed,
-        schema=args.schema, tolerance=args.tolerance)
+        schema=args.schema, tolerance=args.tolerance, skip_header=args.skip_header)
     
     pgcsv.create_table()
 
