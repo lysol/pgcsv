@@ -216,6 +216,8 @@ class PGCSV(object):
         s = s.lower().strip()
         s = re.sub('[- ]', '_', s)
         s = re.sub('\W', '', s)
+        if s == '':
+            s = 'blank'
         return s
 
     def _dedupe_names(self, fields):
@@ -232,8 +234,8 @@ class PGCSV(object):
         detect_types=False, dialect='excel', sniff_dialect=False,
         schema='public', dialect_bytes=2048, drop_first=False,
         clean_field_names=False, detect_type_lines=500, byte_counter=False,
-        debug_file=None, force_tabbed=False, skip_header=True, tolerance=0,
-        **fmtparam):
+        debug_file=None, skip_header=True, tolerance=0, delimiter=',',
+        quote_char=None, **fmtparam):
 
         self.drop_first = drop_first
         self.table_name = table_name
@@ -255,10 +257,9 @@ class PGCSV(object):
             except _csv.Error:
                 dialect=None
                 self.csvfile.seek(pos)
-        if force_tabbed:
-            csv.register_dialect('tabbed', delimiter="\t", quoting=csv.QUOTE_NONE)
-            dialect = 'tabbed'
-        self.csvreader = csv.reader(csvfile, dialect=dialect, **fmtparam)
+        csv.register_dialect('ourdialect', delimiter=delimiter,
+                quotechar=quote_char)
+        self.csvreader = csv.reader(csvfile, dialect='ourdialect', **fmtparam)
         self.get_header()
         self.init_type_dict()
         if clean_field_names:
@@ -296,13 +297,15 @@ def main():
     parser.add_argument('-C', '--byte-counter', action='store_true',
         dest='byte_counter')
     parser.add_argument('--debug-file', dest='debug_file')
-    parser.add_argument('-r', '--force-tabbed', dest='force_tabbed',
-        action='store_true')
     parser.add_argument('-S', '--schema', dest='schema')
     parser.add_argument('-o', '--tolerance', dest='tolerance',
         help='Type detection tolerance', default=0, type=float)
     parser.add_argument('-H', '--skip-header', dest='skip_header',
         action='store_true', default=True)
+    parser.add_argument('-D', '--delimiter', dest="delimiter",
+        default=",")
+    parser.add_argument('-Q', '--quote_char', dest="quote_char",
+        default=None)
 
     args = parser.parse_args()
     
@@ -315,8 +318,9 @@ def main():
         strip_data=args.strip_data, detect_types=args.detect_fieldtypes,
         sniff_dialect=args.auto_detect, drop_first=args.drop_first,
         clean_field_names=args.clean_fields, byte_counter=args.byte_counter,
-        debug_file=args.debug_file, force_tabbed=args.force_tabbed,
-        schema=args.schema, tolerance=args.tolerance, skip_header=args.skip_header)
+        debug_file=args.debug_file, delimiter=args.delimiter,
+        quote_char=args.quote_char, schema=args.schema,
+        tolerance=args.tolerance, skip_header=args.skip_header)
     
     pgcsv.create_table()
 
