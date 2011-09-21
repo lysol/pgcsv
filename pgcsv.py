@@ -96,7 +96,7 @@ class CopyProxy:
                     if self.debug_file:
                         self.dfh.close()
                         self.debug_file = False
-        
+
     def __init__(self, generator, byte_counter=False, debug_file=None):
         self.generator = generator
         self.buf = '' 
@@ -126,7 +126,7 @@ class PGCSV(object):
         #    line = [clean_type(item, self.types[index]) for index, item \
         #        in enumerate(line)]
         return line
-        
+
     def get_header(self):
         pos = self.csvfile.tell()
         self.csvfile.seek(0)
@@ -169,7 +169,7 @@ class PGCSV(object):
                 self.types[index] = highest[0][0]
             else:
                 self.types[index] = 'character varying'
-                
+
         self.csvfile.seek(pos)
 
     def create_table(self):
@@ -178,7 +178,7 @@ class PGCSV(object):
             ["\"%s\" %s" % (field, self.types[index]) for \
             index, field in enumerate(self.header)]
             )
-        
+
         table_query = """
             CREATE TABLE \"%s\".\"%s\" (
                 %s
@@ -282,19 +282,17 @@ def main():
         dest='csvfile', required=True)
     parser.add_argument('-t','--table-name', metavar='TABLENAME',
         dest='table_name', required=True)
-    parser.add_argument('-T','--detect-types', action='store_true',
+    parser.add_argument('-T','--no-detect-types', action='store_true',
         dest='detect_fieldtypes')
-    parser.add_argument('-c', '--clean-field-names', action='store_true',
+    parser.add_argument('-c', '--no-clean-field-names', action='store_true',
         dest='clean_fields')
-    parser.add_argument('-s', '--strip-data', action='store_true',
+    parser.add_argument('-s', '--no-strip-data', action='store_true',
         dest='strip_data')
-    parser.add_argument('-a', '--auto-detect', action='store_true',
-        dest='auto_detect', help='Autodetect delimiters (Default to [,"].')
     parser.add_argument('-p', '--conninfo', metavar='CONNINFO',
         dest='conninfo')
-    parser.add_argument('-d', '--drop-first', action='store_true',
+    parser.add_argument('-d', '--no-drop-first', action='store_true',
         dest='drop_first')
-    parser.add_argument('-C', '--byte-counter', action='store_true',
+    parser.add_argument('-C', '--no-byte-counter', action='store_true',
         dest='byte_counter')
     parser.add_argument('--debug-file', dest='debug_file')
     parser.add_argument('-S', '--schema', dest='schema')
@@ -305,23 +303,25 @@ def main():
     parser.add_argument('-D', '--delimiter', dest="delimiter",
         default=",")
     parser.add_argument('-Q', '--quote_char', dest="quote_char",
-        default=None)
+        default='"')
 
     args = parser.parse_args()
-    
+
     if args.csvfile != '-':
         fo = open(args.csvfile, 'Ur')
     else:
         fo = sys.stdin
 
     pgcsv = PGCSV(fo, args.table_name, args.conninfo,
-        strip_data=args.strip_data, detect_types=args.detect_fieldtypes,
-        sniff_dialect=args.auto_detect, drop_first=args.drop_first,
-        clean_field_names=args.clean_fields, byte_counter=args.byte_counter,
+        strip_data=not args.strip_data,
+        detect_types=not args.detect_fieldtypes,
+        drop_first=not args.drop_first,
+        clean_field_names=not args.clean_fields,
+        byte_counter=not args.byte_counter,
         debug_file=args.debug_file, delimiter=args.delimiter,
         quote_char=args.quote_char, schema=args.schema,
         tolerance=args.tolerance, skip_header=args.skip_header)
-    
+
     pgcsv.create_table()
 
 if __name__ == "__main__":
