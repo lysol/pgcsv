@@ -1,6 +1,9 @@
 pgcsv is both a Python module and command-line utility for loading delimited
 data from text files into database tables.
 
+If you're using a version of Python earlier than 2.7, you'll need to install the
+[argparse](http://code.google.com/p/argparse/) module manaully.
+
 Installation
 ============
 
