@@ -288,8 +288,6 @@ def main():
         dest='clean_fields')
     parser.add_argument('-s', '--no-strip-data', action='store_true',
         dest='strip_data')
-    parser.add_argument('-p', '--conninfo', metavar='CONNINFO',
-        dest='conninfo')
     parser.add_argument('-d', '--no-drop-first', action='store_true',
         dest='drop_first')
     parser.add_argument('-C', '--no-byte-counter', action='store_true',
@@ -304,7 +302,7 @@ def main():
         default=",")
     parser.add_argument('-Q', '--quote_char', dest="quote_char",
         default='"')
-
+    parser.add_argument('conninfo', metavar='CONNINFO', nargs='*')
     args = parser.parse_args()
 
     if args.csvfile != '-':
@@ -312,7 +310,7 @@ def main():
     else:
         fo = sys.stdin
 
-    pgcsv = PGCSV(fo, args.table_name, args.conninfo,
+    pgcsv = PGCSV(fo, args.table_name, ' '.join(args.conninfo),
         strip_data=not args.strip_data,
         detect_types=not args.detect_fieldtypes,
         drop_first=not args.drop_first,

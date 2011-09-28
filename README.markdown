@@ -18,7 +18,7 @@ Usage
 
 You can execute `pgcsv --help` for a list of all options. Basic usage:
 
-    pgcsv -S schema -t table -f csvfile -p connstring
+    pgcsv -S schema -t table -f csvfile connstring
 
 Where `connstring` is a libpq-style [connection string](http://www.postgresql.org/docs/9.1/static/libpq-connect.html).
 
@@ -38,3 +38,7 @@ Notes
 
 You can execute either via the `pgcsv` script that is installed to your system PATH,
 or via `python -m pgcsv`.
+
+If you deal with data that sometimes throws around errant null bytes, use the
+included csvclean script to strip them out. Or just run `sed -i -e 's/\x00//g'
+filename`.
